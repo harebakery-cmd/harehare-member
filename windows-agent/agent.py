@@ -3,6 +3,12 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
+# Windows consoles and redirected CI output can default to a legacy code page.
+# Reconfigure before the first Korean prompt or diagnostic is printed.
+for stream in (sys.stdout, sys.stderr):
+    if stream is not None and hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 SITE = "https://harehare-member.avionenpapier1.chatgpt.site"
 MEMBER_URL = "https://asp.upsolution.co.kr/Customer/Management/100052"
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
