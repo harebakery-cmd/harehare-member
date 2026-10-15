@@ -1,0 +1,43 @@
+name: Build portable Windows POS agent
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'windows-agent/**'
+      - '.github/workflows/build-pos-agent.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r windows-agent/requirements.txt pyinstaller
+      - name: Build executable
+        run: |
+          pyinstaller --noconfirm --clean --onefile --console --name HareharePOSAgent --collect-all playwright windows-agent/agent.py
+      - name: Smoke test on Windows
+        shell: pwsh
+        run: |
+          & .\dist\HareharePOSAgent.exe --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $bytes = [System.IO.File]::ReadAllBytes('dist\HareharePOSAgent.exe')
+          if ($bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw 'Not a Windows PE executable' }
+      - name: Package portable files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path 'package' -Force | Out-Null
+          Copy-Item 'dist\HareharePOSAgent.exe' 'package\HareharePOSAgent.exe'
+          Copy-Item 'windows-agent\start-chrome-debug.bat' 'package\start-chrome-debug.bat'
+          Copy-Item 'windows-agent\README.txt' 'package\README.txt'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HareharePOSAgent-Windows-Portable
+          path: package/
+          if-no-files-found: error
