@@ -1,10 +1,15 @@
-HareharePOSAgent v43
+HareharePOSAgent Windows portable test build
 
-1. Chrome을 완전히 종료합니다.
+1. 실행 중인 자동화용 Chrome/Edge 창을 닫습니다.
 2. start-chrome-debug.bat 실행
 3. 열린 브라우저에서 Cloudflare 확인과 업솔루션 로그인을 직접 완료
-4. install-and-run.bat 실행
+4. HareharePOSAgent.exe 실행
 5. POS 동기화키를 입력하고 포트는 9222로 엔터
+
+Python 설치는 필요하지 않습니다. 신규 회원을 실제 등록할 때 업솔루션 저장 결과를
+직접 확인한 뒤 y를 입력해야 관리 사이트에서 성공 처리됩니다. 저장 단계가
+검증되지 않아 자동 성공 판정은 제공하지 않습니다. 한 건 시험 전까지
+실제 고객 데이터를 처리하지 마세요.
 
 등록 순서: 기본 → 신규 → 회원명/전화번호/휴대폰/성별/우편번호/주소/상세주소 → 부가기능 → SMS·DM → 생년월일·음력 → 저장 → 왼쪽 예 → 기본 → 신규.
 회원그룹·멤버십카드번호·선수예치금·메일·결혼기념일·이메일·기존 주소 사용은 건너뜁니다.
