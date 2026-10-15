@@ -14,7 +14,13 @@ MEMBER_URL = "https://asp.upsolution.co.kr/Customer/Management/100052"
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 
 def api(method, path, key, body=None):
-    data = None; headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
+    # The membership Site rejects urllib's default Python-urllib user agent.
+    # Send the same browser identity used by the existing Windows agent.
+    data = None; headers = {
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36",
+    }
     if body is not None:
         data = json.dumps(body, ensure_ascii=False).encode(); headers["Content-Type"] = "application/json"
     req = Request(SITE + path, headers=headers, method=method, data=data)
@@ -112,7 +118,7 @@ async def register(frame, member):
         raise RuntimeError("저장 결과 미확인: 성공 처리하지 않았습니다. 관리자 화면에서 확인 후 재등록하세요.")
 
 async def main():
-    print("Harehare POS Agent v43")
+    print("Harehare POS Agent v43.1")
     if "--self-test" in sys.argv:
         assert SITE.startswith("https://") and MEMBER_URL.startswith("https://")
         print("SELF-TEST OK: Python 패키징과 설정 검증 완료 (POS 등록 검증은 아님)")
@@ -131,7 +137,18 @@ async def main():
         if "upsolution" not in (page.url or "").lower(): await page.goto(MEMBER_URL, wait_until="domcontentloaded")
         print("로그인된 업솔루션 브라우저를 감시합니다. 종료하려면 Ctrl+C")
         while True:
-            data = api("GET", "/api/sync", key); member = data.get("member")
+            try:
+                data = api("GET", "/api/sync", key)
+            except Exception as exc:
+                print(f"동기화 요청 실패: {exc}")
+                if "HTTP 401" in str(exc):
+                    key = input("POS 동기화키를 다시 입력하세요: ").strip()
+                elif "HTTP 403" in str(exc):
+                    input("서버가 요청을 차단했습니다. 연결을 확인한 뒤 Enter를 누르면 재시도합니다.")
+                else:
+                    await asyncio.sleep(15)
+                continue
+            member = data.get("member")
             if member:
                 try:
                     await register(page, member)
@@ -145,3 +162,7 @@ async def main():
 if __name__ == "__main__":
     try: asyncio.run(main())
     except KeyboardInterrupt: print("종료했습니다.")
+    except Exception as exc:
+        print(f"프로그램 오류: {type(exc).__name__}: {exc}")
+        try: input("오류 내용을 확인한 뒤 Enter를 누르면 종료합니다.")
+        except EOFError: pass
