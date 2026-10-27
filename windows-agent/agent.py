@@ -67,13 +67,71 @@ async def fill_label(frame, labels, value, required=True):
     if required: raise RuntimeError(f"필드 인식 실패: {labels[0]}")
 
 async def click_new(frame):
-    for selector in ["button", "a", "input[type=button]"]:
-        for caption in ["신규", "새로입력", "등록"]:
-            loc = frame.locator(selector).filter(has_text=caption).first
-            try:
-                if await loc.is_visible(timeout=500): await loc.click(); return
-            except Exception: pass
-    raise RuntimeError("신규 버튼을 찾지 못했습니다.")
+    # '등록'이나 부분 일치 버튼은 기존 고객 수정 동작일 수 있다.
+    candidates = [
+        frame.get_by_role("button", name="신규", exact=True),
+        frame.get_by_role("link", name="신규", exact=True),
+        frame.locator('input[type="button"][value="신규"], input[type="submit"][value="신규"]'),
+    ]
+    for candidates_of_type in candidates:
+        for i in range(await candidates_of_type.count()):
+            button = candidates_of_type.nth(i)
+            if await button.is_visible():
+                await button.click()
+                return
+    raise RuntimeError("정확한 [신규] 버튼을 찾지 못했습니다. 기존 회원 정보에는 입력하지 않았습니다.")
+
+
+async def read_field(frame, labels):
+    # 정확한 항목명에 속한 입력칸을 찾는다. 상위 영역의 첫 입력칸을
+    # 읽으면 서로 다른 항목을 같은 칸으로 오인할 수 있으므로 허용하지 않는다.
+    for label in labels:
+        matches = frame.get_by_text(label, exact=True)
+        for i in range(await matches.count()):
+            label_node = matches.nth(i)
+            if not await label_node.is_visible():
+                continue
+            scopes = [
+                label_node.locator("xpath=ancestor::tr[1]"),
+                label_node.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' form-row ')][1]"),
+                label_node.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' field ')][1]"),
+            ]
+            for scope in scopes:
+                if await scope.count() != 1:
+                    continue
+                controls = scope.locator(
+                    "input:not([type=hidden]):not([type=radio]):not([type=checkbox]), textarea"
+                )
+                visible_controls = []
+                for j in range(await controls.count()):
+                    control = controls.nth(j)
+                    if await control.is_visible():
+                        visible_controls.append(control)
+                if len(visible_controls) == 1:
+                    return visible_controls[0], (await visible_controls[0].input_value()).strip()
+    return None, None
+
+
+async def assert_new_form(frame):
+    required = [["회원명", "고객명"], ["휴대폰번호", "휴대전화"]]
+    optional = [["전화번호"], ["우편번호"], ["주소"], ["상세주소"]]
+    for attempt in range(10):
+        fields = [await read_field(frame, labels) for labels in required + optional]
+        name_control, name_value = fields[0]
+        mobile_control, mobile_value = fields[1]
+        if name_control is not None and mobile_control is not None:
+            name_handle = await name_control.element_handle()
+            mobile_handle = await mobile_control.element_handle()
+            distinct = not await name_handle.evaluate("(el, other) => el === other", mobile_handle)
+            if distinct and name_value == "" and mobile_value == "" and all(
+                value in (None, "") for _, value in fields[2:]
+            ):
+                return
+        await asyncio.sleep(0.3)
+    raise RuntimeError(
+        "[신규] 클릭 후 빈 회원 등록 화면을 확인하지 못했습니다. "
+        "기존 고객 덮어쓰기를 막기 위해 입력과 저장을 중단했습니다."
+    )
 
 async def click_save(frame):
     buttons = frame.locator("button, a, input[type=button]")
@@ -86,9 +144,12 @@ async def click_save(frame):
     raise RuntimeError("저장 버튼을 찾지 못했습니다.")
 
 async def register(frame, member):
-    # 1) 기본 탭에서 신규를 먼저 누른다.
+    # 회원 관리 화면에서 [신규]를 누르고 빈 폼 확인 전에는 어떤 값도 쓰지 않는다.
+    if "/Customer/Management/100052" not in frame.url:
+        raise RuntimeError("IMU 회원 관리 화면이 아닙니다. 로그인 후 회원 화면까지 이동해 주세요.")
     await require_click(frame, ["기본"])
     await click_new(frame)
+    await assert_new_form(frame)
     await fill_label(frame, ["회원명", "고객명"], member.get("memberName"))
     await fill_label(frame, ["전화번호"], member.get("telephone"), required=False)
     await fill_label(frame, ["휴대폰번호", "휴대전화"], member.get("mobile"))
