@@ -5,6 +5,10 @@ on:
     paths:
       - 'windows-agent/**'
       - '.github/workflows/build-pos-agent.yml'
+  pull_request:
+    paths:
+      - 'windows-agent/**'
+      - '.github/workflows/build-pos-agent.yml'
   workflow_dispatch:
 
 jobs:
